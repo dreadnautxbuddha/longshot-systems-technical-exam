@@ -1,0 +1,21 @@
+{
+  "name": "dreadnaut/longshot-systems-technical-exam",
+  "description": "A technical exam for Longshot Systems",
+  "autoload": {
+    "psr-4": {
+      "Dreadnaut\\LongshotSystemsTechnicalExam\\": "src/"
+    }
+  },
+  "authors": [
+    {
+      "name": "Peter Cortez",
+      "email": "innov.petercortez@gmail.com"
+    }
+  ],
+  "require": {},
+  "config": {
+    "platform": {
+      "php": "8.3"
+    }
+  }
+}
