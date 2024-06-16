@@ -1,6 +1,11 @@
 # Web Scraping
 This project serves as a technical exam for Longshot Systems.
 
+# Requirements
+| Software | Version |
+|----------|---------|
+| PHP      | 8.3     |
+
 # Usage
 Before starting, make sure to install the dependencies first:
 
