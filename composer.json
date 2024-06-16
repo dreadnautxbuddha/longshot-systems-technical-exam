@@ -12,7 +12,9 @@
       "email": "innov.petercortez@gmail.com"
     }
   ],
-  "require": {},
+  "require": {
+    "guzzlehttp/guzzle": "^7.8"
+  },
   "config": {
     "platform": {
       "php": "8.3"
