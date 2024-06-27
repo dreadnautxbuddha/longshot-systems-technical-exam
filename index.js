@@ -15,7 +15,7 @@ const findNumberBoxesWithinPage = async page => {
   for (let i = 0; i < numberNodes.length; i++) {
     const unevaluatedEl = numberNodes[i];
 
-    [number, data] = await unevaluatedEl.evaluate(el => [el.textContent, el.getAttribute('data')]);
+    const [number, data] = await unevaluatedEl.evaluate(el => [el.textContent, el.getAttribute('data')]);
 
     numberBoxes.push({ number: parseInt(number.trim()), data });
   }
@@ -48,7 +48,7 @@ const fillInputs = async (page, answer, name) => {
  *
  * @returns CdpPage
  */
-const submitAnswer = async page => {
+const clickSubmit = async page => {
   const submitBtn = await page.$('button');
 
   await page.evaluate(submit => submit.click(), submitBtn);
@@ -56,6 +56,52 @@ const submitAnswer = async page => {
 
   return page
 };
+
+const submitAnswer = async (page, answer) => {
+  const prototype = await page.evaluateHandle('WebSocket.prototype');
+  const sockets = await page.queryObjects(prototype);
+
+  await page.evaluate(([socket], answer) => socket.send(answer), sockets, btoa(answer));
+};
+
+const data = {};
+const onWebSocketFrameReceived = async (page, { response: { payloadData } }) => {
+  const segments = atob(payloadData).replace(/"/g, '').split(' ');
+
+  switch (segments[0]) {
+    case 'STORE':
+      // When storing, there are two parameters. The value, and the variable name.
+      var [_, value, destination] = segments;
+      data[destination] = value;
+      break;
+    case 'MOV':
+      // When copying variables to another variable, there are two parameters. The source variable, and the destination
+      // variable.
+      var [_, source, destination] = segments;
+      data[destination] = data[source];
+      break;
+    case 'ADD':
+      // When adding two values together, there are three parameters. The value and the variable that will be used
+      // in the addition operation, and the destination variable with which the final value will be assigned to.
+      var [_, value, source, destination] = segments;
+      data[destination] = parseInt(data[source]) + parseInt(value);
+      break;
+    case 'END':
+      const values = Object.entries(data).map(([variableName, value]) => value);
+
+      if (! values.length) {
+        return;
+      }
+
+      const sum = values.reduce((curr, prev) => parseInt(curr) + parseInt(prev));
+
+      await submitAnswer(page, sum);
+      break;
+    default:
+      console.log('getting something!', payloadData, atob(payloadData));
+      break;
+  }
+}
 
 puppeteer
   .launch({ devtools: true })
@@ -69,78 +115,14 @@ puppeteer
   // Here, we're calculating the answer by simply concatenating all the texts of the number boxes
   .then(({ page, numberBoxes }) => ({ page, answer: parseInt(numberBoxes.map(({ number }) => number).join('')) }))
   .then(async ({ page, answer }) => fillInputs(page, answer, 'Peter Cortez'))
-  .then(submitAnswer)
+  .then(clickSubmit)
   // Since we only care about the logging after the user has submitted the page, we're only going to attach the listener
   // right after submitting the answer.
   .then(async page => {
     const cdp = await page.target().createCDPSession();
-    const data = {};
 
     await cdp.send('Network.enable');
     await cdp.send('Page.enable');
 
-    const printReceivingResponse = async ({ response: { payloadData } }) => {
-      const segments = atob(payloadData).replace(/"/g, '').split(' ');
-
-      switch (segments[0]) {
-        case 'STORE':
-          // When storing, there are two parameters. The variable name, and the value.
-          var [action, value, destination] = segments;
-          data[destination] = value;
-          break;
-        case 'MOV':
-          // When copying variables to another variable, there are two parameters. The destination variable, and the
-          // source variable.
-          var [action, source, destination] = segments;
-          data[destination] = data[source];
-          break;
-        case 'ADD':
-          // When adding two values together, there are three parameters. The value and the variable that will be used
-          // in the addition operation, and the destination variable with which the final value will be assigned to.
-          var [action, value, source, destination] = segments;
-          data[destination] = parseInt(data[source]) + parseInt(value);
-          break;
-        case 'END':
-            console.log('done!', data);
-            const values = Object.entries(data).map(([key, value]) => value);
-
-            if (! values.length) {
-              return;
-            }
-            const prototype = await page.evaluateHandle('WebSocket.prototype');
-            const socketInstances = await page.queryObjects(prototype);
-            const finalValue = values.reduce((curr, prev) => parseInt(curr) + parseInt(prev));
-
-            console.log('heres the final value', finalValue);
-
-            await page.evaluate(
-              (socketInstances, finalValue) => {
-                socketInstance = socketInstances[0];
-                console.log('sending the final value..', finalValue)
-                socketInstance.send(btoa(finalValue));
-              },
-              socketInstances,
-              finalValue
-            );
-            break;
-        default:
-          console.log('getting something!', payloadData, atob(payloadData));
-          break;
-      }
-      // console.log('receiving response: ', response);
-
-      // await page.evaluate((instances) => {
-      //   let instance = instances[0];
-      //   instance.send('Hello');
-      // }, socketInstances);
-    };
-    const printSendingResponse = response => console.log('sending response: ', response);
-
-    cdp.on('Network.webSocketFrameReceived', printReceivingResponse); // Fired when WebSocket message is received.
-    cdp.on('Network.webSocketFrameSent', printSendingResponse); // Fired when WebSocket message is sent.
-
-    // const ws = new WebSocket('wss://challenge.longshotsystems.co.uk/okws');
-    // ws.onmessage = ({ data }) => {
-    //   console.log(data)
-    // };
+    cdp.on('Network.webSocketFrameReceived', response => onWebSocketFrameReceived(page, response));
   });
