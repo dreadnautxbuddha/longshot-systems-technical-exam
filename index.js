@@ -1,4 +1,5 @@
 const puppeteer = require('puppeteer');
+const WebSocket = require('ws');
 
 /**
  * Looks for elements with a class of `.number-box` and returns their text content and `data` attribute as an array.
@@ -56,26 +57,8 @@ const submitAnswer = async page => {
   return page
 };
 
-/**
- * Parses any base64 encoded messages that are logged to the browser
- *
- * @param page
- *
- * @returns CdpPage
- */
-const parseBtoaLogs = async page => {
-  page.on('console', async msg => {
-    try {
-      console.log(atob(msg.text()));
-    } catch (error) {
-    }
-  });
-
-  return page;
-}
-
 puppeteer
-  .launch({ devtools: false })
+  .launch({ devtools: true })
   .then(browser => browser.newPage())
   .then(
     page => page
@@ -89,4 +72,75 @@ puppeteer
   .then(submitAnswer)
   // Since we only care about the logging after the user has submitted the page, we're only going to attach the listener
   // right after submitting the answer.
-  .then(parseBtoaLogs);
+  .then(async page => {
+    const cdp = await page.target().createCDPSession();
+    const data = {};
+
+    await cdp.send('Network.enable');
+    await cdp.send('Page.enable');
+
+    const printReceivingResponse = async ({ response: { payloadData } }) => {
+      const segments = atob(payloadData).replace(/"/g, '').split(' ');
+
+      switch (segments[0]) {
+        case 'STORE':
+          // When storing, there are two parameters. The variable name, and the value.
+          var [action, value, destination] = segments;
+          data[destination] = value;
+          break;
+        case 'MOV':
+          // When copying variables to another variable, there are two parameters. The destination variable, and the
+          // source variable.
+          var [action, source, destination] = segments;
+          data[destination] = data[source];
+          break;
+        case 'ADD':
+          // When adding two values together, there are three parameters. The value and the variable that will be used
+          // in the addition operation, and the destination variable with which the final value will be assigned to.
+          var [action, value, source, destination] = segments;
+          data[destination] = parseInt(data[source]) + parseInt(value);
+          break;
+        case 'END':
+            console.log('done!', data);
+            const values = Object.entries(data).map(([key, value]) => value);
+
+            if (! values.length) {
+              return;
+            }
+            const prototype = await page.evaluateHandle('WebSocket.prototype');
+            const socketInstances = await page.queryObjects(prototype);
+            const finalValue = values.reduce((curr, prev) => parseInt(curr) + parseInt(prev));
+
+            console.log('heres the final value', finalValue);
+
+            await page.evaluate(
+              (socketInstances, finalValue) => {
+                socketInstance = socketInstances[0];
+                console.log('sending the final value..', finalValue)
+                socketInstance.send(btoa(finalValue));
+              },
+              socketInstances,
+              finalValue
+            );
+            break;
+        default:
+          console.log('getting something!', payloadData, atob(payloadData));
+          break;
+      }
+      // console.log('receiving response: ', response);
+
+      // await page.evaluate((instances) => {
+      //   let instance = instances[0];
+      //   instance.send('Hello');
+      // }, socketInstances);
+    };
+    const printSendingResponse = response => console.log('sending response: ', response);
+
+    cdp.on('Network.webSocketFrameReceived', printReceivingResponse); // Fired when WebSocket message is received.
+    cdp.on('Network.webSocketFrameSent', printSendingResponse); // Fired when WebSocket message is sent.
+
+    // const ws = new WebSocket('wss://challenge.longshotsystems.co.uk/okws');
+    // ws.onmessage = ({ data }) => {
+    //   console.log(data)
+    // };
+  });
