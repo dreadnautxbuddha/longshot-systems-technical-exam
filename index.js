@@ -57,37 +57,45 @@ const clickSubmit = async page => {
   return page
 };
 
-const submitAnswer = async (page, answer) => {
-  const prototype = await page.evaluateHandle('WebSocket.prototype');
-  const sockets = await page.queryObjects(prototype);
-
-  await page.evaluate(([socket], answer) => socket.send(answer), sockets, btoa(answer));
-};
-
-const data = {};
-const onWebSocketFrameReceived = async (page, { response: { payloadData } }) => {
+/**
+ * Gets run for every web socket message that we receive. Each message is assumed to be either an instruction, or an
+ * action. An instruction is basically a message that is meant for the developer, whilst an action is meant to be an
+ * operation to be done on the supplied `variables` that can be: `STORE`, `MOV`, `ADD`, or `END`.
+ *
+ * 1. `STORE` stores value in the `variables` object
+ * 2. `MOV` copies a variable's value within the object into another variable
+ * 3. `ADD` performs an addition between a variable and a number, and stores the result to another variable.
+ * 4. `END` is just there to tell us that the next messages will no longer have to be performed.
+ *
+ * @param page
+ * @param variables
+ * @param payloadData
+ *
+ * @returns {Promise<void>}
+ */
+const onWebSocketFrameReceived = async (page, variables, { response: { payloadData } }) => {
   const segments = atob(payloadData).replace(/"/g, '').split(' ');
 
   switch (segments[0]) {
     case 'STORE':
       // When storing, there are two parameters. The value, and the variable name.
       var [_, value, destination] = segments;
-      data[destination] = value;
+      variables[destination] = value;
       break;
     case 'MOV':
       // When copying variables to another variable, there are two parameters. The source variable, and the destination
       // variable.
       var [_, source, destination] = segments;
-      data[destination] = data[source];
+      variables[destination] = variables[source];
       break;
     case 'ADD':
       // When adding two values together, there are three parameters. The value and the variable that will be used
       // in the addition operation, and the destination variable with which the final value will be assigned to.
       var [_, value, source, destination] = segments;
-      data[destination] = parseInt(data[source]) + parseInt(value);
+      variables[destination] = parseInt(variables[source]) + parseInt(value);
       break;
     case 'END':
-      const values = Object.entries(data).map(([variableName, value]) => value);
+      const values = Object.entries(variables).map(([variableName, value]) => value);
 
       if (! values.length) {
         return;
@@ -98,13 +106,27 @@ const onWebSocketFrameReceived = async (page, { response: { payloadData } }) => 
       await submitAnswer(page, sum);
       break;
     default:
-      console.log('getting something!', payloadData, atob(payloadData));
+      console.info(`Instructive message received: [${payloadData}]`, atob(payloadData));
       break;
   }
-}
+};
+
+/**
+ * Sends a base-64 encoded version of the supplied answer to the page's web socket.
+ *
+ * @param page
+ * @param answer
+ * @returns {Promise<void>}
+ */
+const submitAnswer = async (page, answer) => {
+  const prototype = await page.evaluateHandle('WebSocket.prototype');
+  const sockets = await page.queryObjects(prototype);
+
+  await page.evaluate(([socket], answer) => socket.send(answer), sockets, btoa(answer));
+};
 
 puppeteer
-  .launch({ devtools: true })
+  .launch()
   .then(browser => browser.newPage())
   .then(
     page => page
@@ -120,9 +142,11 @@ puppeteer
   // right after submitting the answer.
   .then(async page => {
     const cdp = await page.target().createCDPSession();
+    const variables = {};
 
     await cdp.send('Network.enable');
     await cdp.send('Page.enable');
 
-    cdp.on('Network.webSocketFrameReceived', response => onWebSocketFrameReceived(page, response));
-  });
+    cdp.on('Network.webSocketFrameReceived', response => onWebSocketFrameReceived(page, variables, response));
+  })
+  .catch(error => console.error('An error has occurred', error));
