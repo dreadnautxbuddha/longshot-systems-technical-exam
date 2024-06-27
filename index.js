@@ -1,5 +1,4 @@
 const puppeteer = require('puppeteer');
-const WebSocket = require('ws');
 
 /**
  * Looks for elements with a class of `.number-box` and returns their text content and `data` attribute as an array.
