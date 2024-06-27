@@ -1,0 +1,27 @@
+{
+  "name": "longshot-systems-technical-exam",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "challenge": "node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dreadnautxbuddha/longshot-systems-technical-exam.git"
+  },
+  "author": "Peter Cortez",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dreadnautxbuddha/longshot-systems-technical-exam/issues"
+  },
+  "homepage": "https://github.com/dreadnautxbuddha/longshot-systems-technical-exam#readme",
+  "dependencies": {
+    "puppeteer": "^22.11.1"
+  },
+  "engines" : {
+    "node" : "~16.14.2",
+    "npm" : "~8.19.1"
+  }
+}
