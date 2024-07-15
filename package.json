@@ -1,5 +1,5 @@
 {
-  "name": "longshot-systems-technical-exam",
+  "name": "longshot-systems-web-scraper",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -9,14 +9,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dreadnautxbuddha/longshot-systems-technical-exam.git"
+    "url": "git+https://github.com/dreadnautxbuddha/longshot-systems-web-scraper.git"
   },
   "author": "Peter Cortez",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/dreadnautxbuddha/longshot-systems-technical-exam/issues"
+    "url": "https://github.com/dreadnautxbuddha/longshot-systems-web-scraper/issues"
   },
-  "homepage": "https://github.com/dreadnautxbuddha/longshot-systems-technical-exam#readme",
+  "homepage": "https://github.com/dreadnautxbuddha/longshot-systems-web-scraper#readme",
   "dependencies": {
     "puppeteer": "^22.11.1"
   },

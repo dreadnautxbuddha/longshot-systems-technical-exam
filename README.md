@@ -1,6 +1,6 @@
 # Web Scraping
 
-This project serves as a technical exam for Longshot Systems.
+This project scrapes the https://challenge.longshotsystems.co.uk/go web page.
 
 # Requirements
 
